@@ -75,6 +75,26 @@
   let occasion = 'casual';
   let targetSlot = null;
 
+  // Verklein afbeelding naar max 800px en comprimeer naar JPEG quality 0.7
+  function compressImage(dataUrl, type) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const MAX_SIZE = 800;
+        let w = img.width, h = img.height;
+        if (w > MAX_SIZE || h > MAX_SIZE) {
+          if (w > h) { h = Math.round(h * MAX_SIZE / w); w = MAX_SIZE; }
+          else { w = Math.round(w * MAX_SIZE / h); h = MAX_SIZE; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', 0.7));
+      };
+      img.src = dataUrl;
+    });
+  }
+
   function renderGrid() {
     const grid = document.getElementById('uploadGrid');
     grid.innerHTML = '';
@@ -109,12 +129,13 @@
     btn.textContent = count > 0 ? `Stel outfits samen (${count} item${count > 1 ? 's' : ''})` : 'Stel outfits samen';
   }
 
-  document.getElementById('fileInput').addEventListener('change', (e) => {
+  document.getElementById('fileInput').addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (!file || targetSlot === null) return;
     const reader = new FileReader();
-    reader.onload = (ev) => {
-      slots[targetSlot] = { dataUrl: ev.target.result, type: file.type || 'image/jpeg' };
+    reader.onload = async (ev) => {
+      const compressed = await compressImage(ev.target.result, file.type);
+      slots[targetSlot] = { dataUrl: compressed, type: 'image/jpeg' };
       targetSlot = null;
       renderGrid();
       updateBtn();
@@ -140,14 +161,8 @@
 
     const nummers = items.map(it => `Item ${it.slotIndex}`).join(', ');
     const content = [
-      {
-        type: 'text',
-        text: `Ik heb ${items.length} kledingstukken geüpload: ${nummers}. De foto's staan in dezelfde volgorde als de nummers. Maak 3 outfits voor: ${occasion}. Gebruik "item_indices" met de exacte nummers van de items die je combineert.`
-      },
-      ...items.map(item => ({
-        type: 'image',
-        source: { type: 'base64', media_type: item.type, data: item.dataUrl.split(',')[1] }
-      }))
+      { type: 'text', text: `Ik heb ${items.length} kledingstukken geüpload: ${nummers}. Maak 3 outfits voor: ${occasion}. Gebruik "item_indices" met de exacte nummers.` },
+      ...items.map(item => ({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: item.dataUrl.split(',')[1] } }))
     ];
 
     try {
@@ -157,9 +172,7 @@
         body: JSON.stringify({
           model: 'claude-sonnet-4-6',
           max_tokens: 1200,
-          system: `Je bent ClosetBrain, een persoonlijke AI-stylist. Antwoord ALLEEN in dit JSON-formaat, geen tekst erbuiten, geen backticks:
-{"outfits":[{"titel":"...","item_indices":[1,2],"items":["korte beschrijving item 1","korte beschrijving item 2"],"waarom":"uitleg waarom deze combinatie werkt"},{"titel":"...","item_indices":[1,3],"items":["...","..."],"waarom":"..."},{"titel":"...","item_indices":[2,3],"items":["...","..."],"waarom":"..."}]}
-item_indices = de nummers van de gebruikte items (exact zoals genummerd door de gebruiker).`,
+          system: 'Je bent ClosetBrain, een persoonlijke AI-stylist. Antwoord ALLEEN in dit JSON-formaat, geen tekst erbuiten, geen backticks:\n{"outfits":[{"titel":"...","item_indices":[1,2],"items":["korte beschrijving item 1","korte beschrijving item 2"],"waarom":"uitleg waarom deze combinatie werkt"},{"titel":"...","item_indices":[1,3],"items":["...","..."],"waarom":"..."},{"titel":"...","item_indices":[2,3],"items":["...","..."],"waarom":"..."}]}\nitem_indices = de nummers van de gebruikte items.',
           messages: [{ role: 'user', content }]
         })
       });
@@ -178,38 +191,24 @@ item_indices = de nummers van de gebruikte items (exact zoals genummerd door de 
 
   function renderResults(outfits, uploadedItems) {
     if (!outfits.length) { document.getElementById('output').innerHTML = '<div class="error">Geen outfits gevonden.</div>'; return; }
-
-    // Map slotIndex → dataUrl
     const slotMap = {};
     uploadedItems.forEach(item => { slotMap[item.slotIndex] = item.dataUrl; });
-
     let html = `<p class="results-header">Jouw outfits voor ${occasion}</p>`;
     outfits.forEach((o, i) => {
       const indices = Array.isArray(o.item_indices) ? o.item_indices : [];
-
       let photosHtml = '';
       if (indices.length) {
         photosHtml = '<div class="outfit-photos">';
         indices.forEach((idx, pi) => {
           const url = slotMap[idx];
           const label = o.items && o.items[pi] ? o.items[pi].split(' ').slice(0, 4).join(' ') + '…' : `Item ${idx}`;
-          if (url) {
-            photosHtml += `<div class="outfit-photo-wrap"><img src="${url}" alt="Item ${idx}"><div class="outfit-photo-label">${label}</div></div>`;
-          }
+          if (url) photosHtml += `<div class="outfit-photo-wrap"><img src="${url}" alt="Item ${idx}"><div class="outfit-photo-label">${label}</div></div>`;
         });
         photosHtml += '</div>';
       }
-
       const itemsHtml = (o.items || []).map(item => `<div class="outfit-item"><span class="dot"></span>${item}</div>`).join('');
-
-      html += `<div class="result-card">
-        <div class="outfit-title">Outfit ${i+1}: ${o.titel || ''}</div>
-        ${photosHtml}
-        ${itemsHtml}
-        <div class="why">${o.waarom || ''}</div>
-      </div>`;
+      html += `<div class="result-card"><div class="outfit-title">Outfit ${i+1}: ${o.titel || ''}</div>${photosHtml}${itemsHtml}<div class="why">${o.waarom || ''}</div></div>`;
     });
-
     document.getElementById('output').innerHTML = html;
   }
 
