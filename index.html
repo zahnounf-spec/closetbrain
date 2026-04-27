@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ClosetBrain</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f4f0; min-height: 100vh; padding: 2rem 1rem; }
+  .app { max-width: 560px; margin: 0 auto; }
+  .logo { font-size: 26px; font-weight: 700; color: #1a1a1a; margin-bottom: 4px; }
+  .logo span { color: #1D9E75; }
+  .sub { font-size: 14px; color: #888; margin-bottom: 2rem; }
+  .section-label { font-size: 11px; font-weight: 600; color: #999; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 10px; }
+  .upload-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 0.5rem; }
+  .upload-slot { aspect-ratio: 3/4; border-radius: 10px; border: 1.5px dashed #ccc; background: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; position: relative; overflow: hidden; transition: border-color 0.15s, background 0.15s; }
+  .upload-slot:hover { border-color: #1D9E75; background: #f0fdf8; }
+  .upload-slot img { width: 100%; height: 100%; object-fit: cover; position: absolute; inset: 0; border-radius: 10px; }
+  .plus { font-size: 24px; color: #bbb; }
+  .slot-label { font-size: 11px; color: #bbb; margin-top: 4px; }
+  .slot-number { position: absolute; top: 5px; left: 5px; background: rgba(0,0,0,0.55); color: #fff; font-size: 11px; font-weight: 600; border-radius: 5px; padding: 1px 6px; z-index: 2; }
+  .remove-btn { position: absolute; top: 5px; right: 5px; background: rgba(0,0,0,0.6); border: none; border-radius: 50%; width: 22px; height: 22px; color: #fff; font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 2; }
+  .tip { font-size: 12px; color: #aaa; margin-bottom: 1.5rem; }
+  .occasion-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 1.5rem; }
+  .occ-btn { padding: 7px 16px; border-radius: 20px; border: 1px solid #ddd; background: #fff; font-size: 13px; color: #666; cursor: pointer; transition: all 0.15s; }
+  .occ-btn:hover { border-color: #1D9E75; }
+  .occ-btn.active { background: #E1F5EE; border-color: #1D9E75; color: #0F6E56; font-weight: 600; }
+  .generate-btn { width: 100%; padding: 14px; background: #1D9E75; color: #fff; border: none; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer; margin-bottom: 1.5rem; transition: background 0.15s; }
+  .generate-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .generate-btn:not(:disabled):hover { background: #0F6E56; }
+  .loading { text-align: center; padding: 2.5rem 0; color: #888; font-size: 14px; }
+  .spinner { display: inline-block; width: 22px; height: 22px; border: 2.5px solid #ddd; border-top-color: #1D9E75; border-radius: 50%; animation: spin 0.7s linear infinite; margin-right: 8px; vertical-align: middle; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .error { color: #a32d2d; font-size: 13px; margin-bottom: 1rem; padding: 10px 14px; background: #fff0f0; border-radius: 8px; }
+  .results-header { font-size: 17px; font-weight: 700; color: #1a1a1a; margin-bottom: 1rem; }
+  .result-card { background: #fff; border: 0.5px solid #e5e5e5; border-radius: 14px; padding: 1.25rem; margin-bottom: 1.25rem; }
+  .outfit-title { font-size: 15px; font-weight: 700; color: #1a1a1a; margin-bottom: 12px; }
+  .outfit-photos { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+  .outfit-photo-wrap { display: flex; flex-direction: column; align-items: center; width: 90px; }
+  .outfit-photo-wrap img { width: 90px; height: 120px; object-fit: cover; border-radius: 10px; border: 2px solid #E1F5EE; display: block; }
+  .outfit-photo-label { font-size: 10px; color: #888; text-align: center; margin-top: 5px; line-height: 1.3; max-width: 90px; }
+  .outfit-item { display: flex; align-items: flex-start; gap: 8px; padding: 3px 0; font-size: 13px; color: #444; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: #1D9E75; flex-shrink: 0; margin-top: 5px; }
+  .why { margin-top: 12px; padding-top: 12px; border-top: 0.5px solid #eee; font-size: 13px; color: #777; line-height: 1.65; }
+  input[type="file"] { display: none; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="logo">Closet<span>Brain</span></div>
+  <p class="sub">Upload je kleding, krijg outfits van AI</p>
+
+  <div class="section-label">Kleding (tot 6 items)</div>
+  <div class="upload-grid" id="uploadGrid"></div>
+  <p class="tip">Klik op een vakje om een foto te uploaden</p>
+
+  <div class="section-label">Gelegenheid</div>
+  <div class="occasion-row" id="occasionRow">
+    <button class="occ-btn active" data-val="casual">Casual</button>
+    <button class="occ-btn" data-val="werk">Werk</button>
+    <button class="occ-btn" data-val="date">Date</button>
+    <button class="occ-btn" data-val="feest">Feestje</button>
+    <button class="occ-btn" data-val="sport">Sport</button>
+  </div>
+
+  <button class="generate-btn" id="generateBtn" disabled>Stel outfits samen</button>
+  <div id="output"></div>
+</div>
+
+<input type="file" accept="image/*" id="fileInput">
+
+<script>
+  const MAX = 6;
+  const slots = new Array(MAX).fill(null);
+  let occasion = 'casual';
+  let targetSlot = null;
+
+  function renderGrid() {
+    const grid = document.getElementById('uploadGrid');
+    grid.innerHTML = '';
+    for (let i = 0; i < MAX; i++) {
+      const slot = document.createElement('div');
+      slot.className = 'upload-slot';
+      if (slots[i]) {
+        const img = document.createElement('img');
+        img.src = slots[i].dataUrl;
+        slot.appendChild(img);
+        const num = document.createElement('span');
+        num.className = 'slot-number';
+        num.textContent = i + 1;
+        slot.appendChild(num);
+        const rm = document.createElement('button');
+        rm.className = 'remove-btn';
+        rm.innerHTML = '&#x2715;';
+        rm.onclick = (e) => { e.stopPropagation(); slots[i] = null; renderGrid(); updateBtn(); };
+        slot.appendChild(rm);
+      } else {
+        slot.innerHTML = '<span class="plus">+</span><span class="slot-label">item ' + (i+1) + '</span>';
+        slot.onclick = () => { targetSlot = i; document.getElementById('fileInput').click(); };
+      }
+      grid.appendChild(slot);
+    }
+  }
+
+  function updateBtn() {
+    const count = slots.filter(Boolean).length;
+    const btn = document.getElementById('generateBtn');
+    btn.disabled = count < 1;
+    btn.textContent = count > 0 ? `Stel outfits samen (${count} item${count > 1 ? 's' : ''})` : 'Stel outfits samen';
+  }
+
+  document.getElementById('fileInput').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file || targetSlot === null) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      slots[targetSlot] = { dataUrl: ev.target.result, type: file.type || 'image/jpeg' };
+      targetSlot = null;
+      renderGrid();
+      updateBtn();
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  });
+
+  document.getElementById('occasionRow').querySelectorAll('.occ-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.occ-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      occasion = btn.dataset.val;
+    });
+  });
+
+  document.getElementById('generateBtn').addEventListener('click', async () => {
+    const items = slots.map((s, i) => s ? { ...s, slotIndex: i + 1 } : null).filter(Boolean);
+    if (!items.length) return;
+
+    document.getElementById('output').innerHTML = '<div class="loading"><span class="spinner"></span>AI stylist is bezig...</div>';
+    document.getElementById('generateBtn').disabled = true;
+
+    const nummers = items.map(it => `Item ${it.slotIndex}`).join(', ');
+    const content = [
+      {
+        type: 'text',
+        text: `Ik heb ${items.length} kledingstukken geüpload: ${nummers}. De foto's staan in dezelfde volgorde als de nummers. Maak 3 outfits voor: ${occasion}. Gebruik "item_indices" met de exacte nummers van de items die je combineert.`
+      },
+      ...items.map(item => ({
+        type: 'image',
+        source: { type: 'base64', media_type: item.type, data: item.dataUrl.split(',')[1] }
+      }))
+    ];
+
+    try {
+      const res = await fetch('/api', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 1200,
+          system: `Je bent ClosetBrain, een persoonlijke AI-stylist. Antwoord ALLEEN in dit JSON-formaat, geen tekst erbuiten, geen backticks:
+{"outfits":[{"titel":"...","item_indices":[1,2],"items":["korte beschrijving item 1","korte beschrijving item 2"],"waarom":"uitleg waarom deze combinatie werkt"},{"titel":"...","item_indices":[1,3],"items":["...","..."],"waarom":"..."},{"titel":"...","item_indices":[2,3],"items":["...","..."],"waarom":"..."}]}
+item_indices = de nummers van de gebruikte items (exact zoals genummerd door de gebruiker).`,
+          messages: [{ role: 'user', content }]
+        })
+      });
+
+      const data = await res.json();
+      if (data.error) throw new Error(data.error.message);
+      const text = data.content?.filter(b => b.type === 'text').map(b => b.text).join('') || '';
+      const parsed = JSON.parse(text.replace(/```json|```/g, '').trim());
+      renderResults(parsed.outfits || [], items);
+    } catch (err) {
+      document.getElementById('output').innerHTML = `<div class="error">Fout: ${err.message}</div>`;
+    } finally {
+      updateBtn();
+    }
+  });
+
+  function renderResults(outfits, uploadedItems) {
+    if (!outfits.length) { document.getElementById('output').innerHTML = '<div class="error">Geen outfits gevonden.</div>'; return; }
+
+    // Map slotIndex → dataUrl
+    const slotMap = {};
+    uploadedItems.forEach(item => { slotMap[item.slotIndex] = item.dataUrl; });
+
+    let html = `<p class="results-header">Jouw outfits voor ${occasion}</p>`;
+    outfits.forEach((o, i) => {
+      const indices = Array.isArray(o.item_indices) ? o.item_indices : [];
+
+      let photosHtml = '';
+      if (indices.length) {
+        photosHtml = '<div class="outfit-photos">';
+        indices.forEach((idx, pi) => {
+          const url = slotMap[idx];
+          const label = o.items && o.items[pi] ? o.items[pi].split(' ').slice(0, 4).join(' ') + '…' : `Item ${idx}`;
+          if (url) {
+            photosHtml += `<div class="outfit-photo-wrap"><img src="${url}" alt="Item ${idx}"><div class="outfit-photo-label">${label}</div></div>`;
+          }
+        });
+        photosHtml += '</div>';
+      }
+
+      const itemsHtml = (o.items || []).map(item => `<div class="outfit-item"><span class="dot"></span>${item}</div>`).join('');
+
+      html += `<div class="result-card">
+        <div class="outfit-title">Outfit ${i+1}: ${o.titel || ''}</div>
+        ${photosHtml}
+        ${itemsHtml}
+        <div class="why">${o.waarom || ''}</div>
+      </div>`;
+    });
+
+    document.getElementById('output').innerHTML = html;
+  }
+
+  renderGrid();
+</script>
+</body>
+</html>
